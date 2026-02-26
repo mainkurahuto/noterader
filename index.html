@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>TJA Notes Radar - Web Analyzer</title>
+    <style>
+        body { background: #111; color: #fff; font-family: 'Helvetica Neue', Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        #drop-zone { width: 500px; height: 120px; border: 3px dashed #444; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; transition: 0.3s; cursor: pointer; border-radius: 15px; }
+        #drop-zone:hover { border-color: #ff00ff; background: #222; }
+        canvas { background: #000; box-shadow: 0 0 30px rgba(0,0,0,0.7); border-radius: 10px; }
+        .controls { margin-top: 15px; text-align: center; }
+        #file-input { display: none; }
+        .status { color: #888; font-size: 12px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <div id="drop-zone">TJAファイルをここにドロップ または クリックして選択</div>
+    <input type="file" id="file-input" accept=".tja">
+    
+    <canvas id="radarCanvas" width="700" height="550"></canvas>
+    
+    <div class="controls">
+        <div id="song-title" style="font-size: 26px; font-weight: bold;">---</div>
+        <div id="radar-summary" style="font-size: 18px; color: #ff3333; margin-top: 5px; height: 24px;"></div>
+        <div class="status">C# Logic Version: 1.2.0 (200 Limit / Growth Curve / Stiff Curve)</div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('radarCanvas');
+    const ctx = canvas.getContext('2d');
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+
+    const COLORS = [
+        { name: "NOTES", color: "#ff69b4" }, // Pink
+        { name: "PEAK", color: "#ffa500" },  // Orange
+        { name: "TECH", color: "#00ff00" },  // Lime
+        { name: "SOF-LAN", color: "#00ffff" }, // Cyan
+        { name: "HUKUGOU", color: "#9370db" }, // Purple
+        { name: "STAMINA", color: "#ff0000" }  // Red
+    ];
+
+    dropZone.onclick = () => fileInput.click();
+    fileInput.onchange = (e) => handleFiles(e.target.files);
+    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = "#ff00ff"; };
+    dropZone.ondragleave = () => dropZone.style.borderColor = "#444";
+    dropZone.ondrop = (e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); };
+
+    function handleFiles(files) {
+        if (!files.length) return;
+        const reader = new FileReader();
+        // Shift-JISで読み込み（TJAの標準）
+        reader.onload = (e) => processTJA(e.target.result);
+        reader.readAsText(files[0], 'Shift-JIS');
+    }
+
+    function processTJA(text) {
+        const lines = text.split(/\r?\n/);
+        let title = "Unknown Title";
+        let baseBpm = 120;
+        let currentBpm = 120;
+        let bpms = [];
+        let scrolls = [1.0];
+        let notes = []; // { time: ms, type: int, scroll: float }
+        
+        let currentTimeMs = 0;
+        let isReading = false;
+        let currentScroll = 1.0;
+        let measureCount = 4.0; // 4/4
+
+        // 1. パース処理（時間計算含む）
+        lines.forEach(line => {
+            line = line.split("//")[0].trim(); // コメント削除
+            if (!line) return;
+
+            if (line.startsWith("TITLE:")) title = line.replace("TITLE:", "").trim();
+            if (line.startsWith("BPM:")) {
+                baseBpm = parseFloat(line.replace("BPM:", ""));
+                currentBpm = baseBpm;
+                bpms.push(currentBpm);
+            }
+            if (line.startsWith("#START")) { isReading = true; return; }
+            if (line.startsWith("#END")) isReading = false;
+
+            if (isReading) {
+                if (line.startsWith("#BPMCHANGE")) {
+                    currentBpm = parseFloat(line.replace("#BPMCHANGE", ""));
+                    bpms.push(currentBpm);
+                } else if (line.startsWith("#SCROLL")) {
+                    currentScroll = Math.abs(parseFloat(line.replace("#SCROLL", "")));
+                    scrolls.push(currentScroll);
+                } else if (line.startsWith("#MEASURE")) {
+                    let m = line.replace("#MEASURE", "").trim().split("/");
+                    measureCount = parseFloat(m[0]) / parseFloat(m[1]) * 4;
+                } else if (!line.startsWith("#")) {
+                    // 音符の解析（簡易タイム計算）
+                    const measureNotes = line.replace(/,/g, "");
+                    const hasComma = line.includes(",");
+                    const noteCount = measureNotes.length;
+                    
+                    if (noteCount > 0) {
+                        const msPerNote = (60000 / currentBpm * measureCount) / noteCount;
+                        for (let char of measureNotes) {
+                            if (/[1-4]/.test(char)) {
+                                notes.push({ time: currentTimeMs, type: parseInt(char), scroll: currentScroll });
+                            }
+                            currentTimeMs += msPerNote;
+                        }
+                    } else if (hasComma) {
+                        currentTimeMs += (60000 / currentBpm * measureCount);
+                    }
+                }
+            }
+        });
+
+        if (notes.length === 0) return;
+
+        // 2. 計算ロジック (C#からの移植)
+        const totalSeconds = Math.max(1.0, (notes[notes.length-1].time - notes[0].time) / 1000.0);
+        
+        // 成長曲線関数
+        const applyGrowth = (val) => {
+            if (val <= 0) return 0;
+            return Math.min(200, Math.pow(val / 100.0, 0.98) * 100.0);
+        };
+        // 150からの急減衰関数
+        const applyStiff = (val) => {
+            let res = applyGrowth(val);
+            return res > 150 ? 150 + (res - 150) * 0.25 : res;
+        };
+
+        // --- 各項目計算 ---
+        
+        // 1. NOTES (12打/s = 200)
+        const nps = notes.length / totalSeconds;
+        const resNotes = applyGrowth((nps / 12.0) * 200.0);
+
+        // 2. PEAK (5秒ウィンドウ)
+        let maxPeakNps = 0;
+        for (let t = notes[0].time; t < notes[notes.length-1].time - 5000; t += 500) {
+            let count = notes.filter(n => n.time >= t && n.time < t + 5000).length;
+            maxPeakNps = Math.max(maxPeakNps, count / 5.0);
+        }
+        const resPeak = applyGrowth(maxPeakNps * (170.0 / 20.0));
+
+        // 3. SOFLAN
+        if (bpms.length === 0) bpms = [currentBpm];
+        const maxBpm = Math.max(...bpms);
+        const minBpm = Math.min(...bpms);
+        const bpmRatio = maxBpm / Math.max(1.0, minBpm);
+        const maxScroll = Math.max(...scrolls);
+        const resSoflan = applyGrowth((bpmRatio - 1.0) * 35.0 + (maxScroll * 12.0));
+
+        // --- ループ解析 (TECH, STAMINA, HUKUGOU) ---
+        let count12Plus = 0, maxStream = 0, currentStream = 0;
+        let continuousCount = 0, techChanges = 0, staminaPoints = 0;
+        let prevInterval = -1;
+
+        for (let i = 0; i < notes.length; i++) {
+            let interval = (i > 0) ? notes[i].time - notes[i-1].time : -1;
+            
+            if (interval < 180 && interval > 5) {
+                currentStream++;
+                continuousCount++;
+                
+                // TECH
+                if (prevInterval > 5) {
+                    let diff = Math.abs(interval - prevInterval);
+                    if (diff > (prevInterval * 0.1)) {
+                        let ratio = Math.max(interval, prevInterval) / Math.min(interval, prevInterval);
+                        if (Math.abs(ratio - 2.0) < 0.1 || Math.abs(ratio - 4.0) < 0.1) techChanges += 0.1;
+                        else if (Math.abs(ratio - 1.5) < 0.1 || Math.abs(ratio - 0.75) < 0.1) techChanges += 1.2;
+                        else if (Math.abs(ratio - 1.33) < 0.05 || Math.abs(ratio - 0.66) < 0.05) techChanges += 2.5;
+                        else techChanges += 5.0;
+                    }
+                }
+                // STAMINA
+                let speedWeight = Math.max(0.5, 100.0 / interval);
+                let lengthWeight = 1.0 + (continuousCount / 4.0);
+                staminaPoints += speedWeight * lengthWeight;
+
+                prevInterval = interval;
+            } else {
+                if (currentStream >= 12) count12Plus++;
+                maxStream = Math.max(maxStream, currentStream);
+                currentStream = 0; continuousCount = 0; prevInterval = -1;
+            }
+        }
+
+        const resHukugou = applyStiff((maxStream * 0.5) + (count12Plus * 4.75));
+        const resTech = applyGrowth((techChanges / (totalSeconds + 15)) * 90.0);
+        const resStamina = applyStiff((staminaPoints / totalSeconds) * 3.5);
+
+        const values = [resNotes, resPeak, resTech, resSoflan, resHukugou, resStamina];
+        drawRadar(title, values, minBpm, maxBpm);
+    }
+
+    function drawRadar(title, values, minBpm, maxBpm) {
+        document.getElementById('song-title').innerText = title;
+        const cX = 350, cY = 260, r = 180;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. 100基準背景（黒塗り六角形）
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(20, 20, 20, 0.6)";
+        for(let i=0; i<6; i++) {
+            let a = (i * 60 - 90) * Math.PI / 180;
+            let x = cX + r * 0.5 * Math.cos(a), y = cY + r * 0.5 * Math.sin(a);
+            if(i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath(); ctx.fill();
+
+        // 100基準線（白）
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.lineWidth = 1; ctx.stroke();
+
+        // 2. 本体ポリゴン（一番高い色を採用）
+        const maxVal = Math.max(...values);
+        const dominantIndex = values.indexOf(maxVal);
+        const dominantColor = COLORS[dominantIndex].color;
+
+        ctx.beginPath();
+        for(let i=0; i<6; i++) {
+            let v = values[i] / 200.0;
+            let a = (i * 60 - 90) * Math.PI / 180;
+            let x = cX + r * v * Math.cos(a), y = cY + r * v * Math.sin(a);
+            if(i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = dominantColor + "cc"; // alpha 0.8相当
+        ctx.fill();
+        ctx.strokeStyle = dominantColor;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // 3. 各項目のラベルと色インジケータ
+        ctx.font = "bold 14px sans-serif";
+        for(let i=0; i<6; i++) {
+            let a = (i * 60 - 90) * Math.PI / 180;
+            let lx = cX + (r + 45) * Math.cos(a), ly = cY + (r * 0.8 + 35) * Math.sin(a);
+            
+            // 色付き四角
+            ctx.fillStyle = COLORS[i].color;
+            ctx.fillRect(lx - 55, ly - 10, 10, 10);
+            // 文字
+            ctx.fillStyle = "#fff";
+            ctx.textAlign = "left";
+            ctx.fillText(COLORS[i].name, lx - 40, ly);
+            // 数値
+            ctx.font = "11px sans-serif";
+            ctx.fillText(values[i].toFixed(0), lx - 40, ly + 14);
+            ctx.font = "bold 14px sans-serif";
+        }
+
+        // 4. 情報テキスト
+        ctx.textAlign = "center";
+        const radarSum = (values.reduce((a,b)=>a+b,0) / 6).toFixed(0);
+        document.getElementById('radar-summary').innerText = `RADAR SCORE: ${radarSum}`;
+        
+        ctx.fillStyle = "#fff";
+        ctx.font = "16px sans-serif";
+        const bpmStr = (minBpm === maxBpm) ? `BPM: ${minBpm}` : `BPM: ${minBpm}-${maxBpm}`;
+        ctx.fillText(bpmStr, cX, cY - r - 40);
+
+        // 中心点
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(cX-1, cY-1, 2, 2);
+    }
+
+    drawRadar("TJAファイルを読み込んでください", [0,0,0,0,0,0], 0, 0);
+</script>
+</body>
+</html>
