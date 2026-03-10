@@ -2,21 +2,135 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>TJA Notes Radar - Advanced Analyzer</title>
+    <title>TJA Notes Radar - Advanced Analyzer (Fixed)</title>
     <style>
-        body { background: #111; color: #fff; font-family: 'Segoe UI', Meiryo, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-        #drop-zone { width: 600px; height: 100px; border: 3px dashed #444; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; transition: 0.3s; cursor: pointer; border-radius: 15px; background: #1a1a1a; }
-        #drop-zone:hover { border-color: #ff00ff; background: #222; }
-        canvas { background: #000; box-shadow: 0 0 40px rgba(0,0,0,0.8); border-radius: 10px; }
-        .switch-container { margin-bottom: 15px; background: #222; padding: 10px 25px; border-radius: 30px; border: 1px solid #333; display: flex; align-items: center; gap: 20px; }
-        input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #ff00ff; }
-        #song-title { font-size: 28px; font-weight: bold; color: #efefef; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-        #radar-summary { font-size: 20px; color: #ff3333; margin-top: 5px; font-weight: bold; }
-        #file-input { display: none; }
-        .status { color: #555; font-size: 11px; margin-top: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        body { 
+            background: #111; 
+            color: #fff; 
+            font-family: 'Segoe UI', Meiryo, sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            padding: 20px;
+        }
+        #drop-zone { 
+            width: 600px; 
+            height: 100px; 
+            border: 3px dashed #444; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            margin-bottom: 15px; 
+            transition: 0.3s; 
+            cursor: pointer; 
+            border-radius: 15px; 
+            background: #1a1a1a; 
+        }
+        #drop-zone:hover { 
+            border-color: #ff00ff; 
+            background: #222; 
+        }
+        #drop-zone.drag-over {
+            border-color: #00ff00;
+            background: #2a2a2a;
+        }
+        canvas { 
+            background: #000; 
+            box-shadow: 0 0 40px rgba(0,0,0,0.8); 
+            border-radius: 10px; 
+        }
+        .switch-container { 
+            margin-bottom: 15px; 
+            background: #222; 
+            padding: 10px 25px; 
+            border-radius: 30px; 
+            border: 1px solid #333; 
+            display: flex; 
+            align-items: center; 
+            gap: 20px; 
+        }
+        input[type="checkbox"] { 
+            width: 18px; 
+            height: 18px; 
+            cursor: pointer; 
+            accent-color: #ff00ff; 
+        }
+        #song-title { 
+            font-size: 28px; 
+            font-weight: bold; 
+            color: #efefef; 
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5); 
+        }
+        #radar-summary { 
+            font-size: 20px; 
+            color: #ff3333; 
+            margin-top: 5px; 
+            font-weight: bold; 
+        }
+        #file-input { 
+            display: none; 
+        }
+        .status { 
+            color: #555; 
+            font-size: 11px; 
+            margin-top: 10px; 
+            text-transform: uppercase; 
+            letter-spacing: 1px; 
+        }
+        .info-panel {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            width: 600px;
+            display: none;
+        }
+        .info-panel.active {
+            display: block;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .info-item {
+            background: #222;
+            padding: 8px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .info-item .label {
+            font-size: 11px;
+            color: #888;
+            display: block;
+            margin-bottom: 3px;
+        }
+        .info-item .value {
+            font-size: 18px;
+            color: #fff;
+            font-weight: bold;
+        }
+        .version {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            font-size: 12px;
+            color: #666;
+            background: #1a1a1a;
+            padding: 5px 10px;
+            border-radius: 5px;
+            border: 1px solid #333;
+        }
     </style>
 </head>
 <body>
+
+    <div class="version">v2.0 - Fixed Edition</div>
 
     <div class="switch-container">
         <label style="cursor:pointer; display:flex; align-items:center; gap:8px;">
@@ -33,7 +147,37 @@
     <div style="text-align:center; margin-top:15px;">
         <div id="song-title">---</div>
         <div id="radar-summary"></div>
-        <div class="status">Custom Logic: Tech-Ratio / Continuous-Stamina (Factor 4) / NPS12-200</div>
+        <div class="status">Fixed: Dynamic Threshold / BPM Set / Last Stream / Exponential Stamina</div>
+    </div>
+
+    <div class="info-panel" id="info-panel">
+        <h3 style="margin: 0 0 10px 0; color: #ff00ff;">📊 詳細統計</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="label">総ノーツ数</span>
+                <span class="value" id="total-notes">-</span>
+            </div>
+            <div class="info-item">
+                <span class="label">平均NPS</span>
+                <span class="value" id="avg-nps">-</span>
+            </div>
+            <div class="info-item">
+                <span class="label">最大連打</span>
+                <span class="value" id="max-stream">-</span>
+            </div>
+            <div class="info-item">
+                <span class="label">総再生時間</span>
+                <span class="value" id="duration">-</span>
+            </div>
+            <div class="info-item">
+                <span class="label">BPM範囲</span>
+                <span class="value" id="bpm-range">-</span>
+            </div>
+            <div class="info-item">
+                <span class="label">BPM変化回数</span>
+                <span class="value" id="bpm-changes">-</span>
+            </div>
+        </div>
     </div>
 
 <script>
@@ -42,8 +186,10 @@
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
     const limitToggle = document.getElementById('limit-toggle');
+    const infoPanel = document.getElementById('info-panel');
 
     let currentTJAData = null;
+    let currentStats = null;
 
     const COLORS = [
         { name: "NOTES", color: "#ff69b4" }, // HotPink
@@ -54,78 +200,139 @@
         { name: "STAMINA", color: "#ff0000" }  // Red
     ];
 
+    // イベントハンドラー
     dropZone.onclick = () => fileInput.click();
     fileInput.onchange = (e) => handleFiles(e.target.files);
-    limitToggle.onchange = () => { if(currentTJAData) calculateRadar(currentTJAData); };
-    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = "#ff00ff"; };
-    dropZone.ondragleave = () => dropZone.style.borderColor = "#444";
-    dropZone.ondrop = (e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); };
+    limitToggle.onchange = () => { 
+        if(currentTJAData) calculateRadar(currentTJAData); 
+    };
+    
+    dropZone.ondragover = (e) => { 
+        e.preventDefault(); 
+        dropZone.classList.add('drag-over');
+    };
+    
+    dropZone.ondragleave = () => {
+        dropZone.classList.remove('drag-over');
+    };
+    
+    dropZone.ondrop = (e) => { 
+        e.preventDefault(); 
+        dropZone.classList.remove('drag-over');
+        handleFiles(e.dataTransfer.files); 
+    };
 
+    // 🔧 FIX: TextDecoder を使用したShift-JIS読み込み
     function handleFiles(files) {
         if (!files.length) return;
         const reader = new FileReader();
         reader.onload = (e) => {
-            currentTJAData = e.target.result;
-            calculateRadar(currentTJAData);
+            try {
+                const decoder = new TextDecoder('shift-jis');
+                currentTJAData = decoder.decode(e.target.result);
+                calculateRadar(currentTJAData);
+            } catch (error) {
+                // フォールバック: UTF-8として読み込み
+                console.warn('Shift-JIS decode failed, trying UTF-8', error);
+                const decoder = new TextDecoder('utf-8');
+                currentTJAData = decoder.decode(e.target.result);
+                calculateRadar(currentTJAData);
+            }
         };
-        reader.readAsText(files[0], 'Shift-JIS');
+        reader.readAsArrayBuffer(files[0]);
     }
 
     function calculateRadar(text) {
         const lines = text.split(/\r?\n/);
-        let title = "Unknown Title", currentBpm = 120;
-        let bpms = [], scrolls = [], notes = [];
-        let currentTimeMs = 0, isReading = false, currentScroll = 1.0, measure = 4.0;
+        let title = "Unknown Title", currentBpm = 120, defaultMeasure = 4.0;
+        
+        // 🔧 FIX: Set を使用してBPM/SCROLLの重複を防ぐ
+        let bpmSet = new Set(), scrollSet = new Set(), notes = [];
+        let currentTimeMs = 0, isReading = false, currentScroll = 1.0, measure = defaultMeasure;
 
-        // ギミック対策：ノーツがない場所のBPM/SCROLLを無視するためのバッファ
+        // === TJAファイル解析 ===
         lines.forEach(line => {
-            line = line.split("//")[0].trim();
+            line = line.split("//")[0].trim();  // コメント除去
             if (!line) return;
-            if (line.startsWith("TITLE:")) title = line.replace("TITLE:", "").trim();
-            if (line.startsWith("BPM:")) { currentBpm = parseFloat(line.replace("BPM:", "")); bpms.push(currentBpm); }
-            if (line.startsWith("#START")) { isReading = true; return; }
-            if (line.startsWith("#END")) isReading = false;
+            
+            // メタデータ
+            if (line.startsWith("TITLE:")) {
+                title = line.replace("TITLE:", "").trim();
+            }
+            if (line.startsWith("BPM:")) {
+                currentBpm = parseFloat(line.replace("BPM:", ""));
+            }
+            
+            // 譜面開始/終了
+            if (line.startsWith("#START")) { 
+                isReading = true; 
+                bpmSet.add(currentBpm);
+                return; 
+            }
+            if (line.startsWith("#END")) {
+                isReading = false;
+            }
+            
+            // 譜面データ
             if (isReading) {
-                if (line.startsWith("#BPMCHANGE")) { currentBpm = parseFloat(line.replace("#BPMCHANGE", "")); bpms.push(currentBpm); }
-                else if (line.startsWith("#SCROLL")) { currentScroll = Math.abs(parseFloat(line.replace("#SCROLL", ""))); }
-                else if (line.startsWith("#MEASURE")) { 
+                if (line.startsWith("#BPMCHANGE")) {
+                    currentBpm = parseFloat(line.replace("#BPMCHANGE", "").trim());
+                } 
+                else if (line.startsWith("#SCROLL")) {
+                    currentScroll = Math.abs(parseFloat(line.replace("#SCROLL", "").trim()));
+                } 
+                else if (line.startsWith("#MEASURE")) {
                     let m = line.replace("#MEASURE", "").trim().split("/");
                     measure = (parseFloat(m[0]) / parseFloat(m[1])) * 4;
-                }
+                } 
                 else if (!line.startsWith("#")) {
+                    // 小節データ
                     const measureNotes = line.replace(/,/g, "");
                     const noteCount = measureNotes.length;
+                    
                     if (noteCount > 0) {
                         const msPerNote = (60000 / currentBpm * measure) / noteCount;
                         for (let char of measureNotes) {
                             if (/[1-4]/.test(char)) {
-                                notes.push({ time: currentTimeMs, type: parseInt(char), bpm: currentBpm, scroll: currentScroll });
-                                // ギミック対策：ノーツがある瞬間のBPMとSCROLLのみを評価対象リストに入れる
-                                bpms.push(currentBpm);
-                                scrolls.push(currentScroll);
+                                notes.push({ 
+                                    time: currentTimeMs, 
+                                    type: parseInt(char), 
+                                    bpm: currentBpm, 
+                                    scroll: currentScroll 
+                                });
+                                bpmSet.add(currentBpm);
+                                scrollSet.add(currentScroll);
                             }
                             currentTimeMs += msPerNote;
                         }
-                    } else if (line.includes(",")) {
+                    } else {
+                        // 🔧 FIX: 空小節でも時間を進める
                         currentTimeMs += (60000 / currentBpm * measure);
                     }
+                    
+                    // 🔧 FIX: 小節処理後に measure をリセット
+                    measure = defaultMeasure;
                 }
             }
         });
 
-        if (notes.length === 0) return;
+        if (notes.length === 0) {
+            alert('ノーツが見つかりませんでした');
+            return;
+        }
 
         const firstMs = notes[0].time;
         const lastMs = notes[notes.length - 1].time;
         const totalSeconds = Math.max(1.0, (lastMs - firstMs) / 1000.0);
         const isLimitOff = limitToggle.checked;
 
-        // --- 成長曲線系 ---
+        // === 成長曲線関数 ===
         const applyGrowth = (val) => {
             if (val <= 0) return 0;
             let res = Math.pow(val / 100.0, 0.98) * 100.0;
             return isLimitOff ? res : Math.min(200, res);
         };
+        
         const applyStiff = (val) => {
             let res = applyGrowth(val);
             if (res <= 150) return res;
@@ -133,79 +340,152 @@
             return isLimitOff ? stiffened : Math.min(200, stiffened);
         };
 
-        // 1. NOTES (NPS 12 = 200)
-        const resNotes = applyGrowth((notes.length / totalSeconds / 12.0) * 200.0);
+        // === 1. NOTES (NPS 12 = 200) ===
+        const avgNps = notes.length / totalSeconds;
+        const resNotes = applyGrowth((avgNps / 12.0) * 200.0);
 
-        // 2. PEAK (5秒窓)
-        let maxPeakNps = 0;
-        for (let t = firstMs; t < lastMs - 5000; t += 500) {
-            let count = notes.filter(n => n.time >= t && n.time < t + 5000).length;
-            maxPeakNps = Math.max(maxPeakNps, count / 5.0);
+        // === 2. PEAK (改善版: 1秒窓 + 5秒窓) ===
+        let maxPeak1s = 0, maxPeak5s = 0;
+        
+        // 1秒窓での最大密度
+        for (let t = firstMs; t <= lastMs - 1000; t += 200) {
+            let count1s = notes.filter(n => n.time >= t && n.time < t + 1000).length;
+            maxPeak1s = Math.max(maxPeak1s, count1s);
         }
-        const resPeak = applyGrowth(maxPeakNps * (170.0 / 20.0));
+        
+        // 5秒窓での最大密度
+        for (let t = firstMs; t <= lastMs - 5000; t += 500) {
+            let count5s = notes.filter(n => n.time >= t && n.time < t + 5000).length;
+            maxPeak5s = Math.max(maxPeak5s, count5s / 5.0);
+        }
+        
+        // 短期ピーク(40%) + 中期ピーク(60%)の加重平均
+        const resPeak = applyGrowth((maxPeak1s * 0.4 + maxPeak5s * 0.6) * 14);
 
-        // 3. SOFLAN (ギミック対策済み)
-        const maxBpm = Math.max(...bpms);
-        const minBpm = Math.min(...bpms);
+        // === 3. SOFLAN (改善版: BPM変化頻度も考慮) ===
+        const maxBpm = Math.max(...bpmSet);
+        const minBpm = Math.min(...bpmSet);
         const bpmRatio = maxBpm / Math.max(1.0, minBpm);
-        const maxScroll = scrolls.length > 0 ? Math.max(...scrolls) : 1.0;
-        const resSoflan = applyGrowth((bpmRatio - 1.0) * 35.0 + (maxScroll * 12.0));
+        const maxScroll = Math.max(1.0, ...scrollSet);
+        
+        // BPM変化の頻度を計測
+        let bpmChanges = 0;
+        let prevBpmForChange = notes[0].bpm;
+        notes.forEach(n => {
+            if (Math.abs(n.bpm - prevBpmForChange) > 5) {
+                bpmChanges++;
+                prevBpmForChange = n.bpm;
+            }
+        });
+        const changeFrequency = bpmChanges / notes.length * 1000;
+        
+        const resSoflan = applyGrowth(
+            (bpmRatio - 1.0) * 30.0 + 
+            (maxScroll * 10.0) + 
+            changeFrequency * 2.0
+        );
 
-        // --- ループ解析 (TECH, STAMINA, HUKUGOU) ---
+        // === 4-6. TECH / STAMINA / HUKUGOU (修正版) ===
         let count12Plus = 0, maxStream = 0, currentStream = 0;
         let continuousCount = 0, techChanges = 0, staminaPoints = 0, prevInterval = -1;
 
         for (let i = 0; i < notes.length; i++) {
             let interval = (i > 0) ? notes[i].time - notes[i-1].time : -1;
-            if (interval < 180 && interval > 5) {
+            
+            // 🔧 FIX: BPM依存の動的閾値（16分音符の1.5倍）
+            const sixteenthNoteMs = (60000 / notes[i].bpm) / 4;
+            const threshold = sixteenthNoteMs * 1.5;
+            
+            if (interval < threshold && interval > 5) {
                 currentStream++;
                 continuousCount++;
                 
-                // TECH: リズム切り替え (C#ロジック完全準拠)
-                if (prevInterval > 5) {
+                // === TECH: リズム切り替え検出 ===
+                // 🔧 FIX: 500ms以下の連続音符のみ評価（休符後の誤判定を防ぐ）
+                if (prevInterval > 5 && prevInterval < 500) {
                     let ratio = Math.max(interval, prevInterval) / Math.min(interval, prevInterval);
                     if (ratio > 1.1) {
-                        if (Math.abs(ratio - 2.0) < 0.1 || Math.abs(ratio - 4.0) < 0.1) techChanges += 0.1;
-                        else if (Math.abs(ratio - 1.5) < 0.1 || Math.abs(ratio - 0.75) < 0.1) techChanges += 1.2;
-                        else if (Math.abs(ratio - 1.33) < 0.05 || Math.abs(ratio - 0.66) < 0.05) techChanges += 2.5;
-                        else techChanges += 5.0;
+                        // 2倍/4倍変化（簡単）
+                        if (Math.abs(ratio - 2.0) < 0.1 || Math.abs(ratio - 4.0) < 0.1) {
+                            techChanges += 0.1;
+                        }
+                        // 1.5倍変化（やや難）
+                        else if (Math.abs(ratio - 1.5) < 0.1 || Math.abs(ratio - 0.75) < 0.1) {
+                            techChanges += 1.2;
+                        }
+                        // 1.33倍変化（難）
+                        else if (Math.abs(ratio - 1.33) < 0.05 || Math.abs(ratio - 0.66) < 0.05) {
+                            techChanges += 2.5;
+                        }
+                        // その他の不規則な変化（最難）
+                        else {
+                            techChanges += 5.0;
+                        }
                     }
                 }
-                // STAMINA: 連続性(1/4.0)×速度
+                
+                // === STAMINA: 体力消費 ===
+                // 🔧 改善: 指数的な疲労モデル
                 let speedWeight = Math.max(0.5, 100.0 / interval);
-                let lengthWeight = 1.0 + (continuousCount / 4.0);
-                staminaPoints += speedWeight * lengthWeight;
-
+                let lengthWeight = Math.pow(1.08, Math.min(continuousCount, 100));
+                staminaPoints += speedWeight * lengthWeight * 0.15;
+                
                 prevInterval = interval;
             } else {
+                // 連打終了
                 if (currentStream >= 12) count12Plus++;
                 maxStream = Math.max(maxStream, currentStream);
-                currentStream = 0; continuousCount = 0; prevInterval = -1;
+                currentStream = 0;
+                continuousCount = 0;
+                prevInterval = -1;
             }
         }
+        
+        // 🔧 FIX: ループ終了後、最後の連打を評価
+        if (currentStream >= 12) count12Plus++;
+        maxStream = Math.max(maxStream, currentStream);
 
         const resHukugou = applyStiff((maxStream * 2) + (count12Plus * 1));
         const resTech = applyGrowth((techChanges / (totalSeconds + 15)) * 90.0);
-        const resStamina = applyStiff((staminaPoints / totalSeconds) * 3.5);
+        const resStamina = applyStiff(staminaPoints);
 
-        drawRadar(title, [resNotes, resPeak, resTech, resSoflan, resHukugou, resStamina], minBpm, maxBpm);
+        // 統計情報を保存
+        currentStats = {
+            totalNotes: notes.length,
+            avgNps: avgNps.toFixed(2),
+            maxStream: maxStream,
+            duration: `${Math.floor(totalSeconds / 60)}:${String(Math.floor(totalSeconds % 60)).padStart(2, '0')}`,
+            minBpm: minBpm,
+            maxBpm: maxBpm,
+            bpmChanges: bpmChanges,
+            maxPeak1s: maxPeak1s,
+            maxPeak5s: maxPeak5s.toFixed(1)
+        };
+
+        // レーダーチャート描画
+        drawRadar(title, [resNotes, resPeak, resTech, resSoflan, resHukugou, resStamina]);
+        updateInfoPanel();
     }
 
-    function drawRadar(title, values, minBpm, maxBpm) {
+    function drawRadar(title, values) {
         document.getElementById('song-title').innerText = title;
         const cX = 400, cY = 280, r = 200;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 1. 背景の黒い六角形 (100基準)
+        // 1. 背景の黒い六角形 (100基準線)
         ctx.beginPath();
         ctx.fillStyle = "rgba(30, 30, 30, 0.7)";
         for(let i=0; i<6; i++) {
             let a = (i * 60 - 90) * Math.PI / 180;
-            let x = cX + r * 0.5 * Math.cos(a), y = cY + r * 0.5 * Math.sin(a);
-            if(i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            let x = cX + r * 0.5 * Math.cos(a);
+            let y = cY + r * 0.5 * Math.sin(a);
+            if(i===0) ctx.moveTo(x, y); 
+            else ctx.lineTo(x, y);
         }
-        ctx.closePath(); ctx.fill();
+        ctx.closePath(); 
+        ctx.fill();
         ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+        ctx.lineWidth = 1;
         ctx.setLineDash([5, 5]);
         ctx.stroke();
         ctx.setLineDash([]);
@@ -217,41 +497,91 @@
 
         ctx.beginPath();
         for(let i=0; i<6; i++) {
-            let v = values[i] / 200.0;
+            let v = Math.min(1.0, values[i] / 200.0);  // 200で正規化
             let a = (i * 60 - 90) * Math.PI / 180;
-            let x = cX + r * v * Math.cos(a), y = cY + r * v * Math.sin(a);
-            if(i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            let x = cX + r * v * Math.cos(a);
+            let y = cY + r * v * Math.sin(a);
+            if(i===0) ctx.moveTo(x, y); 
+            else ctx.lineTo(x, y);
         }
         ctx.closePath();
-        ctx.fillStyle = fillCol + "99"; 
+        ctx.fillStyle = fillCol + "99";  // 半透明
         ctx.fill();
         ctx.strokeStyle = fillCol;
         ctx.lineWidth = 4;
         ctx.stroke();
 
-        // 3. ラベルと中心点
+        // 3. 各頂点に円を描画
+        for(let i=0; i<6; i++) {
+            let v = Math.min(1.0, values[i] / 200.0);
+            let a = (i * 60 - 90) * Math.PI / 180;
+            let x = cX + r * v * Math.cos(a);
+            let y = cY + r * v * Math.sin(a);
+            
+            ctx.beginPath();
+            ctx.arc(x, y, 6, 0, Math.PI * 2);
+            ctx.fillStyle = COLORS[i].color;
+            ctx.fill();
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // 4. ラベルと数値
         ctx.font = "bold 15px 'Segoe UI'";
         for(let i=0; i<6; i++) {
             let a = (i * 60 - 90) * Math.PI / 180;
-            let lx = cX + (r + 45) * Math.cos(a), ly = cY + (r * 0.8 + 40) * Math.sin(a);
+            let lx = cX + (r + 45) * Math.cos(a);
+            let ly = cY + (r * 0.8 + 40) * Math.sin(a);
+            
+            // カラーボックス
             ctx.fillStyle = COLORS[i].color;
             ctx.fillRect(lx - 60, ly - 12, 12, 12);
+            
+            // テキスト
             ctx.fillStyle = "#fff";
             ctx.textAlign = "left";
             ctx.fillText(`${COLORS[i].name} ${values[i].toFixed(1)}`, lx - 42, ly);
         }
 
-        // 中心点
-        ctx.fillStyle = "#fff"; ctx.fillRect(cX-2, cY-2, 4, 4);
+        // 5. 中心点
+        ctx.fillStyle = "#fff"; 
+        ctx.fillRect(cX-2, cY-2, 4, 4);
 
-        // 下部情報
+        // 6. 下部サマリー情報
         const radarSum = (values.reduce((a,b)=>a+b,0) / 6).toFixed(0);
         document.getElementById('radar-summary').innerText = `TOTAL RADAR: ${radarSum}`;
-        ctx.textAlign = "center"; ctx.fillStyle = "#aaa"; ctx.font = "16px sans-serif";
-        ctx.fillText(`BPM: ${minBpm === maxBpm ? minBpm : minBpm + "-" + maxBpm}`, cX, cY - r - 50);
+        
+        // BPM情報
+        if (currentStats) {
+            ctx.textAlign = "center"; 
+            ctx.fillStyle = "#aaa"; 
+            ctx.font = "16px sans-serif";
+            const bpmText = currentStats.minBpm === currentStats.maxBpm 
+                ? `BPM: ${currentStats.minBpm}` 
+                : `BPM: ${currentStats.minBpm} - ${currentStats.maxBpm}`;
+            ctx.fillText(bpmText, cX, cY - r - 50);
+        }
     }
 
-    drawRadar("TJAを待機中...", [0,0,0,0,0,0], 0, 0);
+    function updateInfoPanel() {
+        if (!currentStats) return;
+        
+        document.getElementById('total-notes').innerText = currentStats.totalNotes;
+        document.getElementById('avg-nps').innerText = currentStats.avgNps;
+        document.getElementById('max-stream').innerText = currentStats.maxStream;
+        document.getElementById('duration').innerText = currentStats.duration;
+        document.getElementById('bpm-range').innerText = 
+            currentStats.minBpm === currentStats.maxBpm 
+                ? currentStats.minBpm 
+                : `${currentStats.minBpm}-${currentStats.maxBpm}`;
+        document.getElementById('bpm-changes').innerText = currentStats.bpmChanges;
+        
+        infoPanel.classList.add('active');
+    }
+
+    // 初期表示
+    drawRadar("TJAを待機中...", [0,0,0,0,0,0]);
 </script>
 </body>
 </html>
